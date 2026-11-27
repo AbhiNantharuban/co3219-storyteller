@@ -39,12 +39,12 @@ def connect():
         health_check_interval=10,
         socket_keepalive=True,
         socket_connect_timeout=5,
+        socket_timeout=15,
         retry=Retry(ExponentialBackoff(cap=4, base=0.2), 6),
         retry_on_error=[RedisConnectionError, RedisTimeoutError],
     )
 
 async def ensure_story(r, sid, title, premise):
-    """Create a story if it doesn't exist yet. Safe to call many times."""
     await r.hsetnx(k_meta(sid), "title", title)
     await r.hsetnx(k_meta(sid), "premise", premise)
     await r.hsetnx(k_meta(sid), "created_at", str(time.time()))
