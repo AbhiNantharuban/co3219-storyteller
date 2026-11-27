@@ -95,3 +95,19 @@ async def commit_passage(r, sid, base_version, passage, summary, characters, rou
             return new_version
         except WatchError:
             return None
+
+async def publish(r, sid, message):
+    await r.publish(ch_updates(sid), json.dumps(message))
+
+
+async def collect(r, key, expected, deadline):
+    results = []
+    while len(results) < expected:
+        remaining = deadline - time.time()
+        if remaining <= 0:
+            break
+        item = await r.blpop([key], timeout=max(0.1, min(remaining, 2.0)))
+        if item:
+            results.append(json.loads(item[1]))
+    await r.delete(key)
+    return results
