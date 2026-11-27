@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Storyteller — multi-agent story</title>
+<style>
+  :root { --bg:#f6f5f1; --card:#fff; --ink:#1d1d1b; --muted:#6b6a65; --line:#e4e2da;
+          --plot:#5b4fc4; --plot-bg:#eeedfe; --character:#0f7a5f; --character-bg:#e1f5ee;
+          --dialogue:#b4461f; --dialogue-bg:#faece7; --ok:#2f7d32; --warn:#a15c00; --bad:#b3261e; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--ink); }
+  header { display:flex; align-items:center; gap:12px; padding:12px 20px; background:var(--card); border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  header h1 { font-size:18px; margin:0 12px 0 0; }
+  select, input, textarea, button { font:inherit; }
+  select, input, textarea { border:1px solid var(--line); border-radius:8px; padding:7px 9px; background:#fff; }
+  button { border:0; border-radius:8px; padding:8px 14px; background:var(--ink); color:#fff; cursor:pointer; }
+  button.secondary { background:#fff; color:var(--ink); border:1px solid var(--line); }
+  .pills { display:flex; gap:6px; flex-wrap:wrap; margin-left:auto; }
+  .pill { font-size:12px; padding:4px 9px; border-radius:999px; background:#f0eee7; color:var(--muted); white-space:nowrap; }
+  .pill b { color:var(--ink); font-weight:600; }
+  .pill.live { background:#e6f4e7; color:var(--ok); } .pill.down { background:#fbe9e7; color:var(--bad); }
+  main { display:grid; grid-template-columns: minmax(0,1fr) 380px; gap:20px; padding:20px; max-width:1300px; margin:0 auto; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px 18px; }
+  h2 { font-size:22px; margin:0 0 6px; } h3 { font-size:14px; margin:0 0 10px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
+  .premise { color:var(--muted); font-style:italic; margin:0 0 14px; line-height:1.5; }
+  .passage { padding:12px 0; border-top:1px solid var(--line); line-height:1.65; font-size:16px; animation: fadein .6s ease; }
+  .passage .meta { font-size:12px; color:var(--muted); margin-bottom:4px; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  @keyframes fadein { from { background:#fff8dd; } to { background:#fff; } }
+  .badge { font-size:11px; padding:2px 8px; border-radius:999px; font-weight:600; }
+  .b-plot { background:var(--plot-bg); color:var(--plot); } .b-character { background:var(--character-bg); color:var(--character); }
+  .b-dialogue { background:var(--dialogue-bg); color:var(--dialogue); } .b-editor { background:#eee; color:#444; }
+  .side { display:flex; flex-direction:column; gap:16px; }
+  textarea { width:100%; min-height:70px; resize:vertical; }
+  .row { display:flex; gap:8px; align-items:center; margin-top:8px; }
+  .small { font-size:12px; color:var(--muted); }
+  .phase { display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap; }
+  .phase span { font-size:11px; padding:3px 8px; border-radius:6px; background:#f0eee7; color:var(--muted); }
+  .phase span.on { background:var(--ink); color:#fff; } .phase span.done { background:#e6f4e7; color:var(--ok); }
+  .prop { border:1px solid var(--line); border-radius:10px; padding:8px 10px; margin-bottom:8px; font-size:13px; line-height:1.45; }
+  .prop.win { border-color:var(--ok); box-shadow: 0 0 0 1px var(--ok) inset; }
+  .prop .meta { display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-bottom:4px; gap:6px; white-space:nowrap; }
+  .prop .meta > span:last-child { overflow:hidden; text-overflow:ellipsis; }
+  .stats { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .stat { background:#f7f6f2; border-radius:10px; padding:8px 10px; } .stat .n { font-size:20px; font-weight:650; } .stat .l { font-size:11px; color:var(--muted); }
+  .chars li { margin-bottom:4px; font-size:13px; } .chars { padding-left:18px; margin:0; }
+  #newStory { display:none; margin-top:10px; } #newStory input, #newStory textarea { width:100%; margin-bottom:6px; }
+  .notice { font-size:12px; padding:6px 9px; border-radius:8px; background:#fff4e0; color:var(--warn); margin-bottom:8px; display:none; }
+  .empty { color:var(--muted); font-style:italic; padding:12px 0; border-top:1px solid var(--line); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Storyteller</h1>
+  <select id="storySelect" aria-label="Choose story"></select>
+  <button class="secondary" id="newBtn">New story</button>
+  <div class="pills">
+    <span class="pill down" id="conn">Connecting…</span>
+    <span class="pill">version <b id="ver">–</b></span>
+    <span class="pill">served by <b id="served">–</b></span>
+    <span class="pill">leader <b id="leader">–</b></span>
+    <span class="pill">AI <b id="mode">–</b></span>
+  </div>
+</header>
+
+<main>
+  <section class="card">
+    <div id="newStory">
+      <input id="nsTitle" placeholder="Title" maxlength="80">
+      <textarea id="nsPremise" placeholder="Premise: what is the story about?" maxlength="600"></textarea>
+      <div class="row"><button id="nsCreate">Create story</button><button class="secondary" id="nsCancel">Cancel</button></div>
+    </div>
+    <h2 id="title">Loading…</h2>
+    <p class="premise" id="premise"></p>
+    <div id="passages"></div>
+  </section>
+
+  <aside class="side">
+    <div class="card">
+      <h3>Steer the story</h3>
+      <textarea id="promptText" maxlength="300" placeholder="e.g. Reveal who built the tomb"></textarea>
+      <div class="row"><button id="sendBtn">Send to the writers</button><span class="small" id="pending"></span></div>
+    </div>
+
+    <div class="card">
+      <h3>Agents at work</h3>
+      <div class="notice" id="roundNotice"></div>
+      <div class="phase" id="phases">
+        <span data-p="proposing">1 Propose</span><span data-p="reviewing">2 Peer review</span>
+        <span data-p="editing">3 Editor</span><span data-p="committed">4 Committed</span>
+      </div>
+      <div class="small" id="roundInfo">Waiting for the next round…</div>
+      <div id="props" style="margin-top:8px"></div>
+    </div>
+
+    <div class="card">
+      <h3>System</h3>
+      <div class="stats">
+        <div class="stat"><div class="n" id="sRounds">–</div><div class="l">rounds completed</div></div>
+        <div class="stat"><div class="n" id="sPerMin">–</div><div class="l">passages / last minute</div></div>
+        <div class="stat"><div class="n" id="sAvg">–</div><div class="l">avg round time</div></div>
+        <div class="stat"><div class="n" id="sConf">–</div><div class="l">conflicts resolved</div></div>
+      </div>
+      <div class="small" id="queues" style="margin-top:8px"></div>
+    </div>
+
+    <div class="card"><h3>Characters</h3><ul class="chars" id="chars"></ul></div>
+    <div class="card"><h3>Summary so far</h3><div class="small" id="summary" style="line-height:1.5"></div></div>
+  </aside>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+// Escape text before showing it (agent and user text is untrusted)
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const roleName = { plot: "Plot writer", character: "Character writer", dialogue: "Dialogue writer" };
+let sid = new URLSearchParams(location.search).get("story") || "main";
+let version = 0, ws = null, retry = 0, pingTimer = null;
+
+function passageHTML(p) {
+  return `<div class="passage"><div class="meta"><b>v${p.version}</b>
+    <span class="badge b-${esc(p.role)}">${esc(roleName[p.role] || p.role)}</span>
+    <span>peer score ${esc(p.score)}</span><span>by ${esc(p.author_agent || "?")}</span></div>${esc(p.text)}</div>`;
+}
+function renderChars(chars) {
+  $("chars").innerHTML = (chars || []).map(c => `<li><b>${esc(c.name)}</b>: ${esc(c.description)}</li>`).join("") || '<li class="small">None yet</li>';
+}
+function renderSnapshot(s) {
+  version = s.version; $("ver").textContent = "v" + version;
+  $("title").textContent = s.title; $("premise").textContent = s.premise;
+  $("passages").innerHTML = s.passages.length ? s.passages.map(passageHTML).join("")
+    : '<div class="empty">The agents are about to write the first passage…</div>';
+  $("summary").textContent = s.summary || "–"; renderChars(s.characters);
+  if (s.served_by) $("served").textContent = s.served_by;
+  if (s.leader) $("leader").textContent = s.leader;
+  $("pending").textContent = s.pending_prompts ? `${s.pending_prompts} request(s) waiting` : "";
+  if (s.last_round) renderRound({ phase: "committed", ...s.last_round });
+}
+function setPhase(phase) {
+  const order = ["proposing", "reviewing", "editing", "committed"], i = order.indexOf(phase);
+  document.querySelectorAll("#phases span").forEach((el, j) => { el.className = j < i ? "done" : (j === i ? "on" : ""); });
+}
+function renderRound(m) {
+  const notice = $("roundNotice");
+  if (m.phase === "conflict" || m.phase === "failed") {
+    notice.style.display = "block"; notice.textContent = (m.phase === "conflict" ? "Conflict resolved: " : "Round failed: ") + m.error;
+    return;
+  }
+  notice.style.display = "none"; setPhase(m.phase);
+  $("roundInfo").innerHTML = `Round <b>${esc(m.round_id)}</b> on v${esc(m.base_version)} · ${esc(m.fanout)} proposal(s) per writer
+    <span class="small">(${esc(m.fanout_reason)})</span>${m.took_ms ? ` · ${(m.took_ms/1000).toFixed(1)}s` : ""}
+    ${m.prompts && m.prompts.length ? `<br>Honouring: “${m.prompts.map(esc).join("”, “")}”` : ""}
+    ${m.editor_notes ? `<br>Editor: ${esc(m.editor_notes)}` : ""}`;
+  const props = m.proposals || [];
+  $("props").innerHTML = props.map(p => `<div class="prop ${m.chosen === p.id ? "win" : ""}">
+    <div class="meta"><span><span class="badge b-${esc(p.role)}">${esc(roleName[p.role] || p.role)}</span> ${esc(p.id)}</span>
+    <span>${p.score !== undefined ? "score " + esc(p.score) : "awaiting review"} · ${esc(p.agent || "")}</span></div>
+    ${esc((p.text || "").slice(0, 220))}${(p.text || "").length > 220 ? "…" : ""}</div>`).join("");
+}
+async function refetch() {
+  const res = await fetch(`/api/story?story_id=${encodeURIComponent(sid)}`);
+  if (res.ok) renderSnapshot(await res.json());
+}
+function onMessage(ev) {
+  const m = JSON.parse(ev.data);
+  if (m.type === "snapshot") { renderSnapshot(m); return; }
+  if (m.type === "round") { renderRound(m); return; }
+  if (m.type === "prompt") { $("pending").textContent = `${m.pending} request(s) waiting`; return; }
+  if (m.type === "passage") {
+    if (m.version === version + 1) {          // exactly the next version: add it
+      const list = $("passages"); if (version === 0) list.innerHTML = "";
+      list.insertAdjacentHTML("beforeend", passageHTML(m.passage));
+      version = m.version; $("ver").textContent = "v" + version;
+      $("summary").textContent = m.summary || "–"; renderChars(m.characters);
+      renderRound({ phase: "committed", ...m.last_round });
+      list.lastElementChild.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    } else if (m.version > version + 1) {     // we missed one: reload from the source of truth
+      refetch();
+    }                                          // older or duplicate versions: ignore
+  }
+}
+function connect() {
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  ws = new WebSocket(`${proto}://${location.host}/ws?story_id=${encodeURIComponent(sid)}`);
+  ws.onopen = () => { retry = 0; $("conn").textContent = "Live"; $("conn").className = "pill live";
+    clearInterval(pingTimer); pingTimer = setInterval(() => ws.readyState === 1 && ws.send("ping"), 20000); };
+  ws.onmessage = onMessage;
+  ws.onclose = () => { $("conn").textContent = "Reconnecting…"; $("conn").className = "pill down";
+    clearInterval(pingTimer); setTimeout(connect, Math.min(1000 * 2 ** retry++, 8000)); };
+}
+async function loadStories() {
+  const res = await fetch("/api/stories"); const list = await res.json();
+  $("storySelect").innerHTML = list.map(s => `<option value="${esc(s.story_id)}" ${s.story_id === sid ? "selected" : ""}>${esc(s.title)} (v${s.version})</option>`).join("");
+}
+async function pollStats() {
+  try {
+    const s = await (await fetch("/api/stats")).json();
+    $("sRounds").textContent = s.rounds_total; $("sPerMin").textContent = s.contributions_last_minute;
+    $("sAvg").textContent = s.avg_round_ms ? (s.avg_round_ms / 1000).toFixed(1) + "s" : "–";
+    $("sConf").textContent = s.conflicts_total; $("mode").textContent = s.llm_mode;
+    if (s.leader) $("leader").textContent = s.leader;
+    $("queues").textContent = "Waiting tasks: " + Object.entries(s.queue_lengths).map(([k, v]) => `${k} ${v}`).join(" · ");
+  } catch (e) {}
+}
+$("sendBtn").onclick = async () => {
+  const text = $("promptText").value.trim(); if (!text) return;
+  const res = await fetch("/api/prompt", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, story_id: sid }) });
+  if (res.ok) { $("promptText").value = ""; const d = await res.json(); $("pending").textContent = `${d.pending} request(s) waiting`; }
+};
+$("storySelect").onchange = (e) => { sid = e.target.value; history.replaceState(null, "", "?story=" + sid); version = 0; ws && ws.close(); };
+$("newBtn").onclick = () => { $("newStory").style.display = "block"; };
+$("nsCancel").onclick = () => { $("newStory").style.display = "none"; };
+$("nsCreate").onclick = async () => {
+  const res = await fetch("/api/stories", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: $("nsTitle").value, premise: $("nsPremise").value }) });
+  if (!res.ok) { alert("Title needed, and a premise of at least 10 characters."); return; }
+  sid = (await res.json()).story_id; history.replaceState(null, "", "?story=" + sid);
+  $("newStory").style.display = "none"; version = 0; await loadStories(); ws && ws.close();
+};
+loadStories(); connect(); pollStats(); setInterval(pollStats, 5000);
+</script>
+</body>
+</html>
