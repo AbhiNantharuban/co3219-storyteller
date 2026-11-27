@@ -69,3 +69,29 @@ async def load_story(r, sid, recent=50):
         "passages": [json.loads(p) for p in raw],
         "pending_prompts": await r.llen(k_prompts(sid)),
     }
+
+async def commit_passage(r, sid, base_version, passage, summary, characters, round_info):
+
+    key = k_state(sid)
+    async with r.pipeline(transaction=True) as pipe:
+        try:
+            await pipe.watch(key)
+            current = int(await pipe.hget(key, "version") or 0)
+            if current != base_version:
+                await pipe.unwatch()
+                return None
+            new_version = current + 1
+            passage = dict(passage, version=new_version)
+            pipe.multi()
+            pipe.hset(key, mapping={
+                "version": new_version,
+                "summary": summary,
+                "characters": json.dumps(characters),
+                "last_round": json.dumps(round_info),
+                "updated_at": time.time(),
+            })
+            pipe.rpush(k_passages(sid), json.dumps(passage))
+            await pipe.execute()
+            return new_version
+        except WatchError:
+            return None
