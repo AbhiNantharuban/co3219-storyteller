@@ -1,0 +1,139 @@
+# The AI agents: editor + 3 writers. Each is its own Deployment, pulling work from its own Redis queue.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: editor
+  namespace: story
+  labels: { app: editor, tier: agent, app.kubernetes.io/part-of: storyteller }
+spec:
+  selector: { matchLabels: { app: editor } }
+  template:
+    metadata:
+      labels: { app: editor, tier: agent, app.kubernetes.io/part-of: storyteller }
+    spec:
+      topologySpreadConstraints:
+        - { maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: ScheduleAnyway, labelSelector: { matchLabels: { app: editor } } }
+      tolerations:
+        - { key: node.kubernetes.io/not-ready, operator: Exists, effect: NoExecute, tolerationSeconds: 20 }
+        - { key: node.kubernetes.io/unreachable, operator: Exists, effect: NoExecute, tolerationSeconds: 20 }
+      containers:
+        - name: agent
+          image: ghcr.io/abhinantharuban/storyteller:latest
+          imagePullPolicy: Always
+          env:
+            - { name: ROLE, value: editor }
+            - name: POD_NAME
+              valueFrom: { fieldRef: { fieldPath: metadata.name } }
+            - name: LLM_API_KEY
+              valueFrom: { secretKeyRef: { name: llm-secret, key: LLM_API_KEY, optional: true } }
+          envFrom: [{ configMapRef: { name: story-config } }]
+          resources: { requests: { cpu: 50m, memory: 96Mi }, limits: { cpu: 300m, memory: 192Mi } }
+          livenessProbe:
+            exec: { command: ["python", "-c", "import os,sys,time; sys.exit(0 if time.time()-os.path.getmtime('/tmp/alive')<150 else 1)"] }
+            initialDelaySeconds: 20
+            periodSeconds: 20
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: writer-plot
+  namespace: story
+  labels: { app: writer-plot, tier: agent, app.kubernetes.io/part-of: storyteller }
+spec:
+  selector: { matchLabels: { app: writer-plot } }
+  template:
+    metadata:
+      labels: { app: writer-plot, tier: agent, app.kubernetes.io/part-of: storyteller }
+    spec:
+      topologySpreadConstraints:
+        - { maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: ScheduleAnyway, labelSelector: { matchLabels: { app: writer-plot } } }
+      tolerations:
+        - { key: node.kubernetes.io/not-ready, operator: Exists, effect: NoExecute, tolerationSeconds: 20 }
+        - { key: node.kubernetes.io/unreachable, operator: Exists, effect: NoExecute, tolerationSeconds: 20 }
+      containers:
+        - name: agent
+          image: ghcr.io/abhinantharuban/storyteller:latest
+          imagePullPolicy: Always
+          env:
+            - { name: ROLE, value: writer }
+            - { name: WRITER_ROLE, value: plot }
+            - name: POD_NAME
+              valueFrom: { fieldRef: { fieldPath: metadata.name } }
+            - name: LLM_API_KEY
+              valueFrom: { secretKeyRef: { name: llm-secret, key: LLM_API_KEY, optional: true } }
+          envFrom: [{ configMapRef: { name: story-config } }]
+          resources: { requests: { cpu: 50m, memory: 96Mi }, limits: { cpu: 300m, memory: 192Mi } }
+          livenessProbe:
+            exec: { command: ["python", "-c", "import os,sys,time; sys.exit(0 if time.time()-os.path.getmtime('/tmp/alive')<150 else 1)"] }
+            initialDelaySeconds: 20
+            periodSeconds: 20
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: writer-character
+  namespace: story
+  labels: { app: writer-character, tier: agent, app.kubernetes.io/part-of: storyteller }
+spec:
+  selector: { matchLabels: { app: writer-character } }
+  template:
+    metadata:
+      labels: { app: writer-character, tier: agent, app.kubernetes.io/part-of: storyteller }
+    spec:
+      topologySpreadConstraints:
+        - { maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: ScheduleAnyway, labelSelector: { matchLabels: { app: writer-character } } }
+      tolerations:
+        - { key: node.kubernetes.io/not-ready, operator: Exists, effect: NoExecute, tolerationSeconds: 20 }
+        - { key: node.kubernetes.io/unreachable, operator: Exists, effect: NoExecute, tolerationSeconds: 20 }
+      containers:
+        - name: agent
+          image: ghcr.io/abhinantharuban/storyteller:latest
+          imagePullPolicy: Always
+          env:
+            - { name: ROLE, value: writer }
+            - { name: WRITER_ROLE, value: character }
+            - name: POD_NAME
+              valueFrom: { fieldRef: { fieldPath: metadata.name } }
+            - name: LLM_API_KEY
+              valueFrom: { secretKeyRef: { name: llm-secret, key: LLM_API_KEY, optional: true } }
+          envFrom: [{ configMapRef: { name: story-config } }]
+          resources: { requests: { cpu: 50m, memory: 96Mi }, limits: { cpu: 300m, memory: 192Mi } }
+          livenessProbe:
+            exec: { command: ["python", "-c", "import os,sys,time; sys.exit(0 if time.time()-os.path.getmtime('/tmp/alive')<150 else 1)"] }
+            initialDelaySeconds: 20
+            periodSeconds: 20
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: writer-dialogue
+  namespace: story
+  labels: { app: writer-dialogue, tier: agent, app.kubernetes.io/part-of: storyteller }
+spec:
+  selector: { matchLabels: { app: writer-dialogue } }
+  template:
+    metadata:
+      labels: { app: writer-dialogue, tier: agent, app.kubernetes.io/part-of: storyteller }
+    spec:
+      topologySpreadConstraints:
+        - { maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: ScheduleAnyway, labelSelector: { matchLabels: { app: writer-dialogue } } }
+      tolerations:
+        - { key: node.kubernetes.io/not-ready, operator: Exists, effect: NoExecute, tolerationSeconds: 20 }
+        - { key: node.kubernetes.io/unreachable, operator: Exists, effect: NoExecute, tolerationSeconds: 20 }
+      containers:
+        - name: agent
+          image: ghcr.io/abhinantharuban/storyteller:latest
+          imagePullPolicy: Always
+          env:
+            - { name: ROLE, value: writer }
+            - { name: WRITER_ROLE, value: dialogue }
+            - name: POD_NAME
+              valueFrom: { fieldRef: { fieldPath: metadata.name } }
+            - name: LLM_API_KEY
+              valueFrom: { secretKeyRef: { name: llm-secret, key: LLM_API_KEY, optional: true } }
+          envFrom: [{ configMapRef: { name: story-config } }]
+          resources: { requests: { cpu: 50m, memory: 96Mi }, limits: { cpu: 300m, memory: 192Mi } }
+          livenessProbe:
+            exec: { command: ["python", "-c", "import os,sys,time; sys.exit(0 if time.time()-os.path.getmtime('/tmp/alive')<150 else 1)"] }
+            initialDelaySeconds: 20
+            periodSeconds: 20

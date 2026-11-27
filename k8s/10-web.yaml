@@ -1,0 +1,92 @@
+# Website + API. Stateless, 3+ copies spread over the VMs, one public address via Traefik.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: story
+  labels: { app: web, app.kubernetes.io/part-of: storyteller }
+spec:
+  selector: { matchLabels: { app: web } }
+  strategy: { type: RollingUpdate, rollingUpdate: { maxUnavailable: 0, maxSurge: 1 } }
+  template:
+    metadata:
+      labels: { app: web, app.kubernetes.io/part-of: storyteller }
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector: { matchLabels: { app: web } }
+      tolerations:
+        - { key: node.kubernetes.io/not-ready, operator: Exists, effect: NoExecute, tolerationSeconds: 20 }
+        - { key: node.kubernetes.io/unreachable, operator: Exists, effect: NoExecute, tolerationSeconds: 20 }
+      containers:
+        - name: web
+          image: ghcr.io/abhinantharuban/storyteller:latest
+          imagePullPolicy: Always
+          ports: [{ name: http, containerPort: 8000 }]
+          env:
+            - { name: ROLE, value: web }
+            - name: POD_NAME
+              valueFrom: { fieldRef: { fieldPath: metadata.name } }
+            - name: LLM_API_KEY
+              valueFrom: { secretKeyRef: { name: llm-secret, key: LLM_API_KEY, optional: true } }
+          envFrom: [{ configMapRef: { name: story-config } }]
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 5
+            failureThreshold: 2
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  namespace: story
+  labels: { app: web, app.kubernetes.io/part-of: storyteller }
+spec:
+  selector: { app: web }
+  ports: [{ name: http, port: 80, targetPort: http }]
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: web
+  namespace: story
+  labels: { app.kubernetes.io/part-of: storyteller }
+spec:
+  ingressClassName: traefik
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: web, port: { name: http } } }
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: web
+  namespace: story
+spec:
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: web }
+  minReplicas: 3
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource: { name: cpu, target: { type: Utilization, averageUtilization: 60 } }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web
+  namespace: story
+spec:
+  minAvailable: 2
+  selector: { matchLabels: { app: web } }

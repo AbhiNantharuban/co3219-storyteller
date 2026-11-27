@@ -1,0 +1,53 @@
+# Scale each agent on how many tasks are WAITING in its Redis queue (real workload), not CPU.
+# AI agents mostly wait on the API, so CPU barely moves. More story complexity -> more tasks -> more copies.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata: { name: editor, namespace: story }
+spec:
+  scaleTargetRef: { name: editor }
+  minReplicaCount: 2
+  maxReplicaCount: 4
+  pollingInterval: 5
+  cooldownPeriod: 60
+  triggers:
+    - type: redis
+      metadata: { address: "redis-ha-haproxy.story.svc.cluster.local:6379", listName: "tasks:editor", listLength: "1" }
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata: { name: writer-plot, namespace: story }
+spec:
+  scaleTargetRef: { name: writer-plot }
+  minReplicaCount: 2
+  maxReplicaCount: 6
+  pollingInterval: 5
+  cooldownPeriod: 60
+  triggers:
+    - type: redis
+      metadata: { address: "redis-ha-haproxy.story.svc.cluster.local:6379", listName: "tasks:plot", listLength: "1" }
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata: { name: writer-character, namespace: story }
+spec:
+  scaleTargetRef: { name: writer-character }
+  minReplicaCount: 2
+  maxReplicaCount: 6
+  pollingInterval: 5
+  cooldownPeriod: 60
+  triggers:
+    - type: redis
+      metadata: { address: "redis-ha-haproxy.story.svc.cluster.local:6379", listName: "tasks:character", listLength: "1" }
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata: { name: writer-dialogue, namespace: story }
+spec:
+  scaleTargetRef: { name: writer-dialogue }
+  minReplicaCount: 2
+  maxReplicaCount: 6
+  pollingInterval: 5
+  cooldownPeriod: 60
+  triggers:
+    - type: redis
+      metadata: { address: "redis-ha-haproxy.story.svc.cluster.local:6379", listName: "tasks:dialogue", listLength: "1" }

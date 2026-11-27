@@ -1,0 +1,25 @@
+# Namespace + shared settings for every part of the app.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: story
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: story-config
+  namespace: story
+  labels:
+    app.kubernetes.io/part-of: storyteller
+data:
+  LLM_MODE: "mock"                                 # mock | real
+  LLM_BASE_URL: "https://api.openai.com/v1"
+  LLM_MODEL: "CHANGE_ME"
+  REDIS_URL: "redis://redis-ha-haproxy:6379/0"     # HAProxy always points at the current Redis master
+  AUTO_ADVANCE: "true"
+  ROUND_INTERVAL: "15"
+  MAX_PROPOSALS_PER_ROLE: "3"
+  LEADER_ELECTION: "true"
+  PROPOSAL_TIMEOUT: "45"
+  REVIEW_TIMEOUT: "30"
+  EDIT_TIMEOUT: "45"

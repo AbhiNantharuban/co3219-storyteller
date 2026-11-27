@@ -1,0 +1,50 @@
+# Head writer: 2 copies on different VMs; leader election means only one runs rounds.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orchestrator
+  namespace: story
+  labels: { app: orchestrator, app.kubernetes.io/part-of: storyteller }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: orchestrator } }
+  template:
+    metadata:
+      labels: { app: orchestrator, app.kubernetes.io/part-of: storyteller }
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector: { matchLabels: { app: orchestrator } }
+      tolerations:
+        - { key: node.kubernetes.io/not-ready, operator: Exists, effect: NoExecute, tolerationSeconds: 20 }
+        - { key: node.kubernetes.io/unreachable, operator: Exists, effect: NoExecute, tolerationSeconds: 20 }
+      containers:
+        - name: orchestrator
+          image: ghcr.io/abhinantharuban/storyteller:latest
+          imagePullPolicy: Always
+          env:
+            - { name: ROLE, value: orchestrator }
+            - name: POD_NAME
+              valueFrom: { fieldRef: { fieldPath: metadata.name } }
+          envFrom: [{ configMapRef: { name: story-config } }]
+          resources:
+            requests: { cpu: 50m, memory: 96Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+          livenessProbe:
+            exec:
+              command: ["python", "-c", "import os,sys,time; sys.exit(0 if time.time()-os.path.getmtime('/tmp/alive')<60 else 1)"]
+            initialDelaySeconds: 20
+            periodSeconds: 15
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: orchestrator
+  namespace: story
+spec:
+  minAvailable: 1
+  selector: { matchLabels: { app: orchestrator } }

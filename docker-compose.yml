@@ -1,0 +1,42 @@
+# Run the whole system on your laptop:  docker compose up --build -d
+# Then open http://localhost:8000
+
+x-app: &app
+  build: .
+  image: storyteller:local
+  restart: unless-stopped
+  env_file:
+    - path: .env
+      required: false
+  depends_on: [redis]
+
+services:
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+
+  web:
+    <<: *app
+    environment: { ROLE: web, REDIS_URL: "redis://redis:6379/0" }
+    ports: ["8000:8000"]
+
+  orchestrator:
+    <<: *app
+    environment: { ROLE: orchestrator, REDIS_URL: "redis://redis:6379/0" }
+    deploy: { replicas: 2 }
+
+  editor:
+    <<: *app
+    environment: { ROLE: editor, REDIS_URL: "redis://redis:6379/0" }
+
+  writer-plot:
+    <<: *app
+    environment: { ROLE: writer, WRITER_ROLE: plot, REDIS_URL: "redis://redis:6379/0" }
+
+  writer-character:
+    <<: *app
+    environment: { ROLE: writer, WRITER_ROLE: character, REDIS_URL: "redis://redis:6379/0" }
+
+  writer-dialogue:
+    <<: *app
+    environment: { ROLE: writer, WRITER_ROLE: dialogue, REDIS_URL: "redis://redis:6379/0" }
